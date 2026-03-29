@@ -2,29 +2,36 @@
 $ip = $_SERVER["REMOTE_ADDR"];
 $host = gethostbyaddr($ip);
 
-$ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
-$is_cli = preg_match('/curl|wget|httpie|fetch/i', $ua);
+$ua = $_SERVER["HTTP_USER_AGENT"] ?? "";
+$is_cli = preg_match("/curl|wget|httpie|fetch/i", $ua);
+
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
+header("Expires: 0");
+header("Surrogate-Control: no-store");
 
 if ($is_cli) {
     header("Content-Type: text/plain");
     echo $ip . "\n";
-    exit;
+    exit();
 }
 
-$show_host = ($host !== $ip);
+$show_host = $host !== $ip;
 
-function extractPrefix($str) {
+function extractPrefix($str)
+{
     if (filter_var($str, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
-        $blocks = explode(':', $str);
-        $blocks = array_pad($blocks, 8, '0000');
-        return implode(':', array_slice($blocks, 0, 4));
+        $blocks = explode(":", $str);
+        $blocks = array_pad($blocks, 8, "0000");
+        return implode(":", array_slice($blocks, 0, 4));
     } elseif (filter_var($str, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-        $octets = explode('.', $str);
-        return implode('.', array_slice($octets, 0, 3));
+        $octets = explode(".", $str);
+        return implode(".", array_slice($octets, 0, 3));
     }
 }
 
-function hueFromString($str, $offset = 0) {
+function hueFromString($str, $offset = 0)
+{
     $prefix = extractPrefix($str);
     $hash = sha1($prefix . $offset);
     return hexdec(substr($hash, 0, 6)) % 360;
@@ -35,8 +42,8 @@ $hue2 = ($hue1 + 60) % 360;
 $hueMid = round(($hue1 + $hue2) / 2);
 
 $gradStart = "hsl($hue1, 100%, 60%)";
-$gradMid   = "hsl($hueMid, 100%, 60%)";
-$gradEnd   = "hsl($hue2, 100%, 60%)";
+$gradMid = "hsl($hueMid, 100%, 60%)";
+$gradEnd = "hsl($hue2, 100%, 60%)";
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -186,18 +193,24 @@ kbd {
 <div class="info">
 <?php if ($show_host): ?>
   <div class="fit-wrapper">
-    <div id="host" class="gradient-text host-style" onclick="copyWithFeedback(this, '<?= htmlspecialchars($host) ?>')">
+    <div id="host" class="gradient-text host-style" onclick="copyWithFeedback(this, '<?= htmlspecialchars(
+        $host,
+    ) ?>')">
       <?= htmlspecialchars($host) ?>
     </div>
   </div>
   <div class="fit-wrapper">
-    <div id="ip" class="gradient-text ip-style" onclick="copyWithFeedback(this, '<?= htmlspecialchars($ip) ?>')">
+    <div id="ip" class="gradient-text ip-style" onclick="copyWithFeedback(this, '<?= htmlspecialchars(
+        $ip,
+    ) ?>')">
       <?= htmlspecialchars($ip) ?>
     </div>
   </div>
 <?php else: ?>
   <div class="fit-wrapper">
-    <div id="host" class="gradient-text host-style" onclick="copyWithFeedback(this, '<?= htmlspecialchars($ip) ?>')">
+    <div id="host" class="gradient-text host-style" onclick="copyWithFeedback(this, '<?= htmlspecialchars(
+        $ip,
+    ) ?>')">
       <?= htmlspecialchars($ip) ?>
     </div>
   </div>
