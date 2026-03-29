@@ -1,6 +1,5 @@
 <?php
 $ip = $_SERVER["REMOTE_ADDR"];
-$host = gethostbyaddr($ip);
 
 $ua = $_SERVER["HTTP_USER_AGENT"] ?? "";
 $is_cli = preg_match("/curl|wget|httpie|fetch/i", $ua);
@@ -16,6 +15,7 @@ if ($is_cli) {
     exit();
 }
 
+$host = gethostbyaddr($ip);
 $show_host = $host !== $ip;
 
 function extractPrefix($str)
