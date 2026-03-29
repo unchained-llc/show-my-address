@@ -1,5 +1,110 @@
 <?php
-$ip = $_SERVER["REMOTE_ADDR"];
+function ipInCidr($ip, $cidr)
+{
+    if (strpos($cidr, "/") === false) {
+        return $ip === $cidr;
+    }
+
+    [$subnet, $bits] = explode("/", $cidr, 2);
+
+    $ipBin = inet_pton($ip);
+    $subnetBin = inet_pton($subnet);
+    if (
+        $ipBin === false ||
+        $subnetBin === false ||
+        strlen($ipBin) !== strlen($subnetBin)
+    ) {
+        return false;
+    }
+
+    $bits = (int) $bits;
+    $maxBits = strlen($ipBin) * 8;
+    if ($bits < 0 || $bits > $maxBits) {
+        return false;
+    }
+
+    $fullBytes = intdiv($bits, 8);
+    $remainingBits = $bits % 8;
+
+    if (
+        $fullBytes > 0 &&
+        substr($ipBin, 0, $fullBytes) !== substr($subnetBin, 0, $fullBytes)
+    ) {
+        return false;
+    }
+
+    if ($remainingBits === 0) {
+        return true;
+    }
+
+    $mask = (0xff << 8 - $remainingBits) & 0xff;
+    $ipByte = ord($ipBin[$fullBytes]);
+    $subnetByte = ord($subnetBin[$fullBytes]);
+
+    return ($ipByte & $mask) === ($subnetByte & $mask);
+}
+
+function isTrustedProxy($remoteAddr, $trustedProxyCidrs)
+{
+    foreach ($trustedProxyCidrs as $cidr) {
+        if ($cidr !== "" && ipInCidr($remoteAddr, $cidr)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function firstValidIpFromCsv($value)
+{
+    foreach (explode(",", $value) as $part) {
+        $candidate = trim($part);
+        if (filter_var($candidate, FILTER_VALIDATE_IP)) {
+            return $candidate;
+        }
+    }
+    return null;
+}
+
+function resolveClientIp($trustedProxyCidrs)
+{
+    $remoteAddr = $_SERVER["REMOTE_ADDR"] ?? "";
+    if (!filter_var($remoteAddr, FILTER_VALIDATE_IP)) {
+        return "";
+    }
+
+    if (!isTrustedProxy($remoteAddr, $trustedProxyCidrs)) {
+        return $remoteAddr;
+    }
+
+    $cfConnectingIp = $_SERVER["HTTP_CF_CONNECTING_IP"] ?? "";
+    if (filter_var($cfConnectingIp, FILTER_VALIDATE_IP)) {
+        return $cfConnectingIp;
+    }
+
+    $trueClientIp = $_SERVER["HTTP_TRUE_CLIENT_IP"] ?? "";
+    if (filter_var($trueClientIp, FILTER_VALIDATE_IP)) {
+        return $trueClientIp;
+    }
+
+    $xForwardedFor = $_SERVER["HTTP_X_FORWARDED_FOR"] ?? "";
+    $xffIp = firstValidIpFromCsv($xForwardedFor);
+    if ($xffIp !== null) {
+        return $xffIp;
+    }
+
+    $xRealIp = $_SERVER["HTTP_X_REAL_IP"] ?? "";
+    if (filter_var($xRealIp, FILTER_VALIDATE_IP)) {
+        return $xRealIp;
+    }
+
+    return $remoteAddr;
+}
+
+$trustedProxyConfig = getenv("TRUSTED_PROXIES") ?: "";
+$trustedProxyCidrs = array_values(
+    array_filter(array_map("trim", explode(",", $trustedProxyConfig))),
+);
+$ip = resolveClientIp($trustedProxyCidrs);
 
 $ua = $_SERVER["HTTP_USER_AGENT"] ?? "";
 $is_cli = preg_match("/curl|wget|httpie|fetch/i", $ua);
