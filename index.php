@@ -194,10 +194,38 @@ html, body {
   background-clip: text;
   text-fill-color: transparent;
   white-space: nowrap;
+}
+.copy-control {
   cursor: pointer;
+}
+.copy-control:focus-visible {
+  outline: 2px solid var(--grad-mid);
+  outline-offset: 8px;
+  border-radius: 6px;
 }
 .host-style { font-size: 5em; }
 .ip-style   { font-size: 2em; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gradient-text,
+  .help-box {
+    animation: none !important;
+  }
+  .progress-bar {
+    transition: none !important;
+  }
+}
 
 @keyframes moveGradient {
   0%   { background-position: 0% 50%; }
@@ -298,29 +326,48 @@ kbd {
 <div class="info">
 <?php if ($show_host): ?>
   <div class="fit-wrapper">
-    <div id="host" class="gradient-text host-style" onclick="copyWithFeedback(this, '<?= htmlspecialchars(
-        $host,
-    ) ?>')">
+    <div
+      id="host"
+      class="gradient-text host-style copy-control"
+      data-copy="<?= htmlspecialchars($host, ENT_QUOTES) ?>"
+      role="button"
+      tabindex="0"
+      aria-label="Copy hostname to clipboard"
+      onclick="copyWithFeedback(this)"
+      onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); copyWithFeedback(this); }">
       <?= htmlspecialchars($host) ?>
     </div>
   </div>
   <div class="fit-wrapper">
-    <div id="ip" class="gradient-text ip-style" onclick="copyWithFeedback(this, '<?= htmlspecialchars(
-        $ip,
-    ) ?>')">
+    <div
+      id="ip"
+      class="gradient-text ip-style copy-control"
+      data-copy="<?= htmlspecialchars($ip, ENT_QUOTES) ?>"
+      role="button"
+      tabindex="0"
+      aria-label="Copy IP address to clipboard"
+      onclick="copyWithFeedback(this)"
+      onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); copyWithFeedback(this); }">
       <?= htmlspecialchars($ip) ?>
     </div>
   </div>
 <?php else: ?>
   <div class="fit-wrapper">
-    <div id="host" class="gradient-text host-style" onclick="copyWithFeedback(this, '<?= htmlspecialchars(
-        $ip,
-    ) ?>')">
+    <div
+      id="host"
+      class="gradient-text host-style copy-control"
+      data-copy="<?= htmlspecialchars($ip, ENT_QUOTES) ?>"
+      role="button"
+      tabindex="0"
+      aria-label="Copy IP address to clipboard"
+      onclick="copyWithFeedback(this)"
+      onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); copyWithFeedback(this); }">
       <?= htmlspecialchars($ip) ?>
     </div>
   </div>
 <?php endif; ?>
 </div>
+<div id="copy-status" class="sr-only" aria-live="polite"></div>
 
 <!-- Help Overlay -->
 <div id="help-overlay">
@@ -341,12 +388,62 @@ kbd {
 </div>
 
 <script>
-function copyWithFeedback(el, text) {
-  navigator.clipboard.writeText(text).then(() => {
-    const original = el.innerText;
-    el.innerText = "Copied";
-    setTimeout(() => el.innerText = original, 1000);
+function fallbackCopyText(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.position = "fixed";
+  ta.style.top = "-9999px";
+  ta.style.left = "-9999px";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+
+  let ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch (_) {
+    ok = false;
+  }
+
+  document.body.removeChild(ta);
+  return ok;
+}
+
+async function writeClipboardText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (_) {
+      return fallbackCopyText(text);
+    }
+  }
+  return fallbackCopyText(text);
+}
+
+function announceStatus(message) {
+  const status = document.getElementById("copy-status");
+  if (!status) return;
+  status.textContent = "";
+  requestAnimationFrame(() => {
+    status.textContent = message;
   });
+}
+
+function showCopyFeedback(el, success) {
+  const original = el.innerText;
+  el.innerText = success ? "Copied" : "Copy Failed";
+  setTimeout(() => {
+    el.innerText = original;
+  }, 1000);
+}
+
+async function copyWithFeedback(el) {
+  const text = el.getAttribute("data-copy") || el.innerText;
+  const success = await writeClipboardText(text);
+  showCopyFeedback(el, success);
+  announceStatus(success ? "Copied to clipboard" : "Failed to copy to clipboard");
 }
 
 function scaleToFit(el) {
