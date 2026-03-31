@@ -37,7 +37,7 @@ function ipInCidr($ip, $cidr)
         return true;
     }
 
-    $mask = (0xff << 8 - $remainingBits) & 0xff;
+    $mask = (0xff << (8 - $remainingBits)) & 0xff;
     $ipByte = ord($ipBin[$fullBytes]);
     $subnetByte = ord($subnetBin[$fullBytes]);
 
@@ -188,7 +188,7 @@ html, body {
 .gradient-text {
   background: linear-gradient(270deg, var(--grad-start), var(--grad-mid), var(--grad-end), var(--grad-mid), var(--grad-start));
   background-size: 800% 800%;
-  animation: moveGradient 20s linear infinite;
+  animation: moveGradient 20s ease-in-out infinite;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -238,6 +238,7 @@ html, body {
   position: fixed;
   z-index: 9999;
   transition: width 0.4s ease, height 0.4s ease, opacity 0.4s ease;
+  animation-fill-mode: forwards;
 }
 #progress-bar-top {
   top: 0; left: 0;
@@ -286,7 +287,7 @@ html, body {
   -webkit-background-clip: text;
   background-image: linear-gradient(270deg, var(--grad-start), var(--grad-mid), var(--grad-end), var(--grad-mid), var(--grad-start));
   background-size: 800% 800%;
-  animation: moveGradient 20s linear infinite;
+  animation: moveGradient 20s ease-in-out infinite;
 }
 .help-box h2 {
   font-size: 1.5em;
@@ -456,15 +457,21 @@ function scaleToFit(el) {
 const bars = ["top", "bottom", "left", "right"].map(pos =>
   document.getElementById("progress-bar-" + pos)
 );
+const increment = 1;
+const maxProgress = 100;
 let progress = 0;
+
 const interval = setInterval(() => {
-  progress += Math.random() * 10;
-  if (progress < 90) {
-    bars[0].style.width = progress + '%';
-    bars[1].style.width = progress + '%';
-    bars[2].style.height = progress + '%';
-    bars[3].style.height = progress + '%';
+  progress += increment;
+  if (progress >= maxProgress) {
+    progress = maxProgress;
+    clearInterval(interval);
   }
+
+  bars[0].style.width = progress + '%';
+  bars[1].style.width = progress + '%';
+  bars[2].style.height = progress + '%';
+  bars[3].style.height = progress + '%';
 }, 100);
 
 window.addEventListener("load", () => {
