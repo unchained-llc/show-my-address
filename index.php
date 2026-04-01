@@ -160,6 +160,7 @@ $gradEnd = "hsl($hue2, 100%, 60%)";
   --grad-start: <?= $gradStart ?>;
   --grad-mid: <?= $gradMid ?>;
   --grad-end: <?= $gradEnd ?>;
+  --progress-thickness: 5px;
 }
 html, body {
   height: 100%;
@@ -227,6 +228,12 @@ html, body {
   }
 }
 
+@media (max-width: 768px) {
+  :root {
+    --progress-thickness: 7px;
+  }
+}
+
 @keyframes moveGradient {
   0%   { background-position: 0% 50%; }
   50%  { background-position: 100% 50%; }
@@ -234,30 +241,37 @@ html, body {
 }
 
 /* Progress Bars */
-.progress-bar {
+#progress-frame {
   position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
   z-index: 9999;
+}
+.progress-bar {
+  position: absolute;
   transition: width 0.4s ease, height 0.4s ease, opacity 0.4s ease;
   animation-fill-mode: forwards;
 }
 #progress-bar-top {
   top: 0; left: 0;
-  width: 0%; height: 4px;
+  width: 0%; height: var(--progress-thickness);
   background: linear-gradient(to right, var(--grad-start), var(--grad-end));
 }
 #progress-bar-bottom {
   bottom: 0; right: 0;
-  width: 0%; height: 4px;
+  width: 0%; height: var(--progress-thickness);
   background: linear-gradient(to left, var(--grad-start), var(--grad-end));
 }
 #progress-bar-left {
   bottom: 0; left: 0;
-  width: 4px; height: 0%;
+  width: var(--progress-thickness); height: 0%;
   background: linear-gradient(to top, var(--grad-start), var(--grad-end));
 }
 #progress-bar-right {
   top: 0; right: 0;
-  width: 4px; height: 0%;
+  width: var(--progress-thickness); height: 0%;
   background: linear-gradient(to bottom, var(--grad-start), var(--grad-end));
 }
 
@@ -319,10 +333,12 @@ kbd {
 <body>
 
 <!-- Progress Bars -->
-<div id="progress-bar-top" class="progress-bar"></div>
-<div id="progress-bar-bottom" class="progress-bar"></div>
-<div id="progress-bar-left" class="progress-bar"></div>
-<div id="progress-bar-right" class="progress-bar"></div>
+<div id="progress-frame" aria-hidden="true">
+  <div id="progress-bar-top" class="progress-bar"></div>
+  <div id="progress-bar-bottom" class="progress-bar"></div>
+  <div id="progress-bar-left" class="progress-bar"></div>
+  <div id="progress-bar-right" class="progress-bar"></div>
+</div>
 
 <div class="info">
 <?php if ($show_host): ?>
