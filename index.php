@@ -120,8 +120,27 @@ if ($is_cli) {
     exit();
 }
 
-$host = gethostbyaddr($ip);
-$show_host = $host !== $ip;
+if (isset($_GET["rdns"]) && $_GET["rdns"] === "1") {
+    header("Content-Type: application/json; charset=UTF-8");
+
+    $resolvedHost = "";
+    if (filter_var($ip, FILTER_VALIDATE_IP)) {
+        $candidateHost = @gethostbyaddr($ip);
+        if (
+            is_string($candidateHost) &&
+            $candidateHost !== "" &&
+            $candidateHost !== $ip
+        ) {
+            $resolvedHost = $candidateHost;
+        }
+    }
+
+    echo json_encode(
+        ["ip" => $ip, "host" => $resolvedHost],
+        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+    );
+    exit();
+}
 
 function extractPrefix($str)
 {
@@ -341,21 +360,20 @@ kbd {
 </div>
 
 <div class="info">
-<?php if ($show_host): ?>
   <div class="fit-wrapper">
     <div
       id="host"
       class="gradient-text host-style copy-control"
-      data-copy="<?= htmlspecialchars($host, ENT_QUOTES) ?>"
+      data-copy="<?= htmlspecialchars($ip, ENT_QUOTES) ?>"
       role="button"
       tabindex="0"
-      aria-label="Copy hostname to clipboard"
+      aria-label="Copy IP address to clipboard"
       onclick="copyWithFeedback(this)"
       onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); copyWithFeedback(this); }">
-      <?= htmlspecialchars($host) ?>
+      <?= htmlspecialchars($ip) ?>
     </div>
   </div>
-  <div class="fit-wrapper">
+  <div id="ip-row" class="fit-wrapper" style="display:none;">
     <div
       id="ip"
       class="gradient-text ip-style copy-control"
@@ -368,21 +386,6 @@ kbd {
       <?= htmlspecialchars($ip) ?>
     </div>
   </div>
-<?php else: ?>
-  <div class="fit-wrapper">
-    <div
-      id="host"
-      class="gradient-text host-style copy-control"
-      data-copy="<?= htmlspecialchars($ip, ENT_QUOTES) ?>"
-      role="button"
-      tabindex="0"
-      aria-label="Copy IP address to clipboard"
-      onclick="copyWithFeedback(this)"
-      onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); copyWithFeedback(this); }">
-      <?= htmlspecialchars($ip) ?>
-    </div>
-  </div>
-<?php endif; ?>
 </div>
 <div id="copy-status" class="sr-only" aria-live="polite"></div>
 
@@ -469,6 +472,59 @@ function scaleToFit(el) {
   el.style.transform = `scale(${Math.min(scale, 1)})`;
 }
 
+async function lazyLoadHostname() {
+  const hostEl = document.getElementById("host");
+  const ipEl = document.getElementById("ip");
+  const ipRow = document.getElementById("ip-row");
+  if (!hostEl) return;
+
+  const requestUrl = new URL(window.location.pathname, window.location.origin);
+  requestUrl.searchParams.set("rdns", "1");
+  requestUrl.searchParams.set("_ts", String(Date.now()));
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 1500);
+
+  try {
+    const response = await fetch(requestUrl.toString(), {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: { "Accept": "application/json" }
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) return;
+    const data = await response.json();
+    if (!data) return;
+
+    const latestIp = (typeof data.ip === "string" && data.ip) ? data.ip : currentIp;
+    currentIp = latestIp;
+
+    hostEl.innerText = latestIp;
+    hostEl.setAttribute("data-copy", latestIp);
+    hostEl.setAttribute("aria-label", "Copy IP address to clipboard");
+
+    if (ipEl) {
+      ipEl.innerText = latestIp;
+      ipEl.setAttribute("data-copy", latestIp);
+    }
+
+    if (data.host && data.host !== latestIp) {
+      hostEl.innerText = data.host;
+      hostEl.setAttribute("data-copy", data.host);
+      hostEl.setAttribute("aria-label", "Copy hostname to clipboard");
+      if (ipRow) ipRow.style.display = "flex";
+    } else if (ipRow) {
+      ipRow.style.display = "none";
+    }
+
+    scaleToFit(hostEl);
+    if (ipEl) scaleToFit(ipEl);
+  } catch (_) {
+    clearTimeout(timeoutId);
+  }
+}
+
 // Progress bar animation
 const bars = ["top", "bottom", "left", "right"].map(pos =>
   document.getElementById("progress-bar-" + pos)
@@ -500,24 +556,24 @@ window.addEventListener("load", () => {
   setTimeout(() => bars.forEach(b => b.remove()), 800);
 
   const hostEl = document.getElementById("host");
-  const ipEl = document.getElementById("ip");
   if (hostEl) scaleToFit(hostEl);
-  if (ipEl) scaleToFit(ipEl);
+
+  lazyLoadHostname();
 });
 
-const ipValue = "<?= htmlspecialchars($ip) ?>";
+let currentIp = "<?= htmlspecialchars($ip) ?>";
 document.addEventListener("keydown", function(e) {
   const key = e.key.toLowerCase();
   if (key === "w") {
-    window.open(`https://iplocation.io/ip-whois-lookup/${ipValue}`, "_blank");
+    window.open(`https://iplocation.io/ip-whois-lookup/${currentIp}`, "_blank");
   } else if (key === "p") {
-    window.open(`https://iplocation.io/ping/${ipValue}`, "_blank");
+    window.open(`https://iplocation.io/ping/${currentIp}`, "_blank");
   } else if (key === "l") {
-    window.open(`https://networksdb.io/ip/${ipValue}`, "_blank");
+    window.open(`https://networksdb.io/ip/${currentIp}`, "_blank");
   } else if (key === "s") {
     window.open("https://speed.cloudflare.com/", "_blank");
   } else if (key === "b") {
-    window.open(`https://mxtoolbox.com/SuperTool.aspx?action=blacklist%3a${ipValue}&run=toolpage`, "_blank");
+    window.open(`https://mxtoolbox.com/SuperTool.aspx?action=blacklist%3a${currentIp}&run=toolpage`, "_blank");
   } else if (key === "j") {
     window.open("https://browserleaks.com/javascript", "_blank");
   } else if (key === "t") {
