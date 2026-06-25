@@ -54,11 +54,29 @@ function isTrustedProxy($remoteAddr, $trustedProxyCidrs)
     return false;
 }
 
+function isValidIp($value)
+{
+    if (!is_string($value) || $value === "") {
+        return false;
+    }
+    return inet_pton($value) !== false;
+}
+
+function isValidIpv4($value)
+{
+    return isValidIp($value) && strpos($value, ":") === false;
+}
+
+function isValidIpv6($value)
+{
+    return isValidIp($value) && strpos($value, ":") !== false;
+}
+
 function firstValidIpFromCsv($value)
 {
     foreach (explode(",", $value) as $part) {
         $candidate = trim($part);
-        if (filter_var($candidate, FILTER_VALIDATE_IP)) {
+        if (isValidIp($candidate)) {
             return $candidate;
         }
     }
@@ -68,7 +86,7 @@ function firstValidIpFromCsv($value)
 function resolveClientIp($trustedProxyCidrs)
 {
     $remoteAddr = $_SERVER["REMOTE_ADDR"] ?? "";
-    if (!filter_var($remoteAddr, FILTER_VALIDATE_IP)) {
+    if (!isValidIp($remoteAddr)) {
         return "";
     }
 
@@ -77,12 +95,12 @@ function resolveClientIp($trustedProxyCidrs)
     }
 
     $cfConnectingIp = $_SERVER["HTTP_CF_CONNECTING_IP"] ?? "";
-    if (filter_var($cfConnectingIp, FILTER_VALIDATE_IP)) {
+    if (isValidIp($cfConnectingIp)) {
         return $cfConnectingIp;
     }
 
     $trueClientIp = $_SERVER["HTTP_TRUE_CLIENT_IP"] ?? "";
-    if (filter_var($trueClientIp, FILTER_VALIDATE_IP)) {
+    if (isValidIp($trueClientIp)) {
         return $trueClientIp;
     }
 
@@ -93,7 +111,7 @@ function resolveClientIp($trustedProxyCidrs)
     }
 
     $xRealIp = $_SERVER["HTTP_X_REAL_IP"] ?? "";
-    if (filter_var($xRealIp, FILTER_VALIDATE_IP)) {
+    if (isValidIp($xRealIp)) {
         return $xRealIp;
     }
 
@@ -124,7 +142,7 @@ if (isset($_GET["rdns"]) && $_GET["rdns"] === "1") {
     header("Content-Type: application/json; charset=UTF-8");
 
     $resolvedHost = "";
-    if (filter_var($ip, FILTER_VALIDATE_IP)) {
+    if (isValidIp($ip)) {
         $candidateHost = @gethostbyaddr($ip);
         if (
             is_string($candidateHost) &&
@@ -144,14 +162,25 @@ if (isset($_GET["rdns"]) && $_GET["rdns"] === "1") {
 
 function extractPrefix($str)
 {
-    if (filter_var($str, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
-        $blocks = explode(":", $str);
-        $blocks = array_pad($blocks, 8, "0000");
-        return implode(":", array_slice($blocks, 0, 4));
-    } elseif (filter_var($str, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+    if (isValidIpv6($str)) {
+        $bin = inet_pton($str);
+        if ($bin === false) {
+            return "";
+        }
+        $hex = unpack("H*", $bin);
+        if (!isset($hex[1])) {
+            return "";
+        }
+        $chunks = str_split($hex[1], 4);
+        return implode(":", array_slice($chunks, 0, 4));
+    }
+
+    if (isValidIpv4($str)) {
         $octets = explode(".", $str);
         return implode(".", array_slice($octets, 0, 3));
     }
+
+    return "";
 }
 
 function hueFromString($str, $offset = 0)
